@@ -1,10 +1,20 @@
 [package]
-name = "http_server"
+name = "axtel"
 version = "0.1.0"
 edition = "2021"
+rust-version = "1.66"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[lib]
+name = "axtel"
+path = "src/lib.rs"
+
+[[bin]]
+name = "axtel_dev"
+path = "src/bin.rs"
 
 [dependencies]
-tokio = {version = "1.37.0", features = ["full"]}
-anyhow = "*"
+tokio = { version = "1.37.0", features = ["full"] }
+anyhow = "1.0.81"
+hyper = { version = "1.2.0", features = ["full"] }
+hyper-util = { version = "0.1.3", features = ["full"] }
