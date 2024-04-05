@@ -38,8 +38,6 @@ macro_rules! impl_function_handler {
             $( $ty: FromRequestParts + Send + Sync  , )*
             $last: FromRequest + Send
         {
-            //type Future = HandlerFuture;//Pin<Box<dyn Future<Output = Response> + Send>>;
-
             fn call(&self, req: Request) -> HandlerFuture {
                 let f = self.f.clone();
                 Box::pin(async move {
@@ -47,17 +45,15 @@ macro_rules! impl_function_handler {
                     $(
                         let $ty = match $ty::from_request_parts(&parts) {
                             Ok(value) => value,
-                            //Err(rejection) => return rejection.into_response(),
-                            Err(_) => panic!("failed to extract from request"),
+                            Err(err) => return err.into_response(),//panic!("failed to extract from request"),
                         };
                     )*
                     let req = Request::from_parts(parts,body);
                     let $last = match $last::from_request(req) {
                         Ok(value) => value,
-                        Err(_) => panic!("failed to extract from request"),
+                        Err(err) => return err.into_response(), //panic!("failed to extract from request"),
                     };
 
-                    //let res = (self.f)($($ty,)*).await;
                     let res = (f)($($ty,)* $last).await;
 
                     res.into_response()
@@ -66,6 +62,7 @@ macro_rules! impl_function_handler {
         }
     };
 }
+
 impl<F, Fut, Res> Handler for FunctionHandler<(), F>
 where
     F: Fn() -> Fut + Clone + Send + Sync + 'static,
@@ -80,7 +77,6 @@ where
         })
     }
 }
-//impl_function_handler!([],);
 impl_function_handler!([], T1);
 impl_function_handler!([T1], T2);
 impl_function_handler!([T1, T2], T3);

@@ -1,8 +1,5 @@
 use anyhow::Result;
-use hyper::{
-    body::Incoming,
-    http::{self, request::Parts},
-};
+use hyper::http::{self, request::Parts};
 
 pub type Method = http::Method;
 
@@ -21,16 +18,16 @@ impl FromRequestParts for Path {
     }
 }
 
-pub type Body = Incoming;
+pub type Body = String;
 
 impl FromRequest for Body {
-    fn from_request(_request: Request) -> Result<Self> {
-        todo!()
-        //return Ok(*request.body());
+    fn from_request(request: Request) -> Result<Self> {
+        let (_, body) = request.into_parts();
+        return Ok(body);
     }
 }
 
-pub type Request<T = Incoming> = http::Request<T>;
+pub type Request<T = Body> = http::Request<T>;
 
 impl FromRequest for Request {
     fn from_request(request: Request) -> Result<Self> {

@@ -69,3 +69,12 @@ impl IntoResponse for &str {
             .unwrap();
     }
 }
+
+impl IntoResponse for anyhow::Error {
+    fn into_response(self) -> Response {
+        return http::Response::builder()
+            .status(StatusCode::BAD_REQUEST)
+            .body(self.to_string())
+            .unwrap();
+    }
+}
