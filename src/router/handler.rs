@@ -1,5 +1,6 @@
 use std::{future::Future, marker::PhantomData, pin::Pin};
 
+
 use crate::http::{
     request::{FromRequest, FromRequestParts, Request},
     response::{IntoResponse, Response},
@@ -9,6 +10,7 @@ pub trait Handler: Send + Sync {
     //type Future: Future<Output = Response> + Send;
     fn call(&self, request: Request) -> HandlerFuture;
 }
+
 
 pub trait IntoHandler<Input>
 where

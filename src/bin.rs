@@ -1,17 +1,19 @@
-use std::{
-    fmt::{Write},
-    net::SocketAddr,
-    println,
-};
+use std::{fmt::Write, net::SocketAddr, println, time::Duration};
 
 use anyhow::Result;
 use axtel::{
-    http::{request::Path, response::IntoResponse},
+    http::{
+        request::{Path, Request},
+        response::IntoResponse,
+    },
     json::Json,
     router::{method_router::get, Router},
 };
+use hyper::body::Incoming;
+use hyper_util::service::TowerToHyperService;
 use serde::{Deserialize, Serialize};
 use tokio::net::TcpListener;
+use tower::ServiceBuilder;
 
 #[derive(Deserialize, Serialize)]
 struct User {
@@ -57,6 +59,10 @@ async fn date() -> impl IntoResponse {
     return date;
 }
 
+async fn loop_inf() -> impl IntoResponse {
+    tokio::time::sleep(Duration::new(10, 0)).await;
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     let router = Router::new()
@@ -66,12 +72,17 @@ async fn main() -> Result<()> {
         .route("/user", get(create_user))
         .route("/json", get(print_json))
         .route("/date", get(date))
+        .route("/loop", get(loop_inf))
         .route("/complex", get(complex));
 
     let addr = SocketAddr::from(([127, 0, 0, 1], 3000));
     let listener = TcpListener::bind(addr).await?;
     println!("listening on: {}", addr);
     println!("routes: {}", router.clone());
-    axtel::server::serve(listener, router).await?;
+    let svc = ServiceBuilder::new()
+        .timeout(Duration::new(11, 0))
+        .service(router);
+    let svc = TowerToHyperService::new(svc);
+    axtel::server::serve(listener, svc).await?;
     Ok(())
 }

@@ -5,10 +5,12 @@ use std::fmt;
 use std::{collections::HashMap, future::Future, pin::Pin, sync::Arc};
 
 use self::method_router::Route;
+use crate::http::response::IntoResponse;
 use crate::http::{request::Request, response::Response};
 use anyhow::Result;
 use http_body_util::BodyExt;
 use hyper::{body::Incoming, http, service::Service, StatusCode};
+use tower::Layer;
 
 #[derive(Clone)]
 pub struct Router {
@@ -24,6 +26,17 @@ impl Router {
 
     pub fn route(mut self, path: &str, route: (Route, http::Method)) -> Self {
         Arc::make_mut(&mut self.router).route(path, route);
+        return self;
+    }
+
+    pub fn layer<L>(mut self, service: L) -> Self
+    where
+        L: Layer<Route>,
+        L::Service: tower::Service<hyper::Request<std::string::String>>,
+        <L::Service as tower::Service<Request>>::Response: IntoResponse + 'static,
+        <L::Service as tower::Service<Request>>::Error: Into<hyper::Error> + 'static,
+        <L::Service as tower::Service<Request>>::Future: Send + 'static,
+    {
         return self;
     }
 }
@@ -42,16 +55,36 @@ async fn incoming_to_string(req: Request<Incoming>) -> Result<Request> {
     return Ok(req);
 }
 
-impl Service<Request<Incoming>> for Router {
+impl tower::Service<Request<Incoming>> for Router {
+    type Response = Response<String>;
+    type Error = anyhow::Error;
+    type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send>>;
+
+    fn poll_ready(
+        &mut self,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<std::result::Result<(), Self::Error>> {
+        std::task::Poll::Ready(Ok(()))
+    }
+    fn call(&mut self, request: Request<Incoming>) -> Self::Future {
+        let router = self.router.clone();
+        return Box::pin(async move {
+            let request = incoming_to_string(request).await?;
+            router.handle_request(request).await
+        });
+    }
+}
+
+impl hyper::service::Service<Request<Incoming>> for Router {
     type Response = Response<String>;
     type Error = anyhow::Error;
     type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>> + Send>>;
 
     fn call(&self, request: Request<Incoming>) -> Self::Future {
-        let router = self.clone();
+        let router = self.router.clone();
         return Box::pin(async move {
             let request = incoming_to_string(request).await?;
-            router.router.handle_request(request).await
+            router.handle_request(request).await
         });
     }
 }
