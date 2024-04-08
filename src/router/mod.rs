@@ -5,12 +5,12 @@ use std::fmt;
 use std::{collections::HashMap, future::Future, pin::Pin, sync::Arc};
 
 use self::method_router::Route;
-use crate::http::response::IntoResponse;
 use crate::http::{request::Request, response::Response};
+use crate::middleware::Middleware;
 use anyhow::Result;
 use http_body_util::BodyExt;
-use hyper::{body::Incoming, http, service::Service, StatusCode};
-use tower::Layer;
+use hyper::{body::Incoming, http, StatusCode};
+use tower::layer::util::Identity;
 
 #[derive(Clone)]
 pub struct Router {
@@ -29,15 +29,20 @@ impl Router {
         return self;
     }
 
-    pub fn layer<L>(mut self, service: L) -> Self
-    where
-        L: Layer<Route>,
-        L::Service: tower::Service<hyper::Request<std::string::String>>,
-        <L::Service as tower::Service<Request>>::Response: IntoResponse + 'static,
-        <L::Service as tower::Service<Request>>::Error: Into<hyper::Error> + 'static,
-        <L::Service as tower::Service<Request>>::Future: Send + 'static,
-    {
-        return self;
+    pub fn layer<L>(self, layer: L) -> Middleware<L> {
+        Middleware {
+            layer,
+            router: self,
+        }
+    }
+
+    pub fn middleware(self) -> Middleware<Identity> {
+        return Middleware::new(self);
+    }
+
+    ///to keep consistent with ['Middleware<L>::service'](Middleware)
+    pub fn service(self) -> Self {
+        self
     }
 }
 
@@ -62,10 +67,11 @@ impl tower::Service<Request<Incoming>> for Router {
 
     fn poll_ready(
         &mut self,
-        cx: &mut std::task::Context<'_>,
+        _cx: &mut std::task::Context<'_>,
     ) -> std::task::Poll<std::result::Result<(), Self::Error>> {
         std::task::Poll::Ready(Ok(()))
     }
+
     fn call(&mut self, request: Request<Incoming>) -> Self::Future {
         let router = self.router.clone();
         return Box::pin(async move {
@@ -98,9 +104,11 @@ impl fmt::Display for Router {
     }
 }
 
+type RoutePath = (http::Method, String);
+
 #[derive(Clone)]
 pub(crate) struct InnerRouter {
-    routes: HashMap<(http::Method, String), Route>,
+    routes: HashMap<RoutePath, Route>,
 }
 
 impl InnerRouter {
@@ -115,8 +123,7 @@ impl InnerRouter {
     }
 
     pub(crate) async fn handle_request(&self, request: Request) -> Result<Response> {
-        //TODO: implement this
-        let Some(route) =  self
+        let Some(route) = self
             .routes
             .get(&(request.method().clone(), request.uri().path().to_string())) else {
                 return Ok(hyper::Response::builder().status(StatusCode::NOT_FOUND).body(String::new())?);

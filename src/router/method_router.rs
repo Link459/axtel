@@ -12,7 +12,6 @@ macro_rules! impl_method_router_methods {
             T: IntoHandler<U> + 'static,
             U: 'static,
         {
-            //let mut router = MethodRouter::new();
             let route = Arc::new(handler.into_handler());
             return (Route(route), hyper::http::Method::$upper);
         }
